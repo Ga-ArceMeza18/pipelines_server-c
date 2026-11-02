@@ -1,0 +1,23 @@
+# General gitignore
+*.class
+*.exe
+*.o
+*.obj
+*.out
+*.dll
+*.so
+*.dylib
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.user
+
+html/
+latex/
+man/
+xml/
+bin/
+build/
