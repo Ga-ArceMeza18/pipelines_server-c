@@ -30,16 +30,17 @@ static char* duplicate_string(const char* text) {
 static bool varlist_grow(VarList* list) {
     int new_capacity;
 
+    // Si la capacidad es cero, inicializarla a 4; de lo contrario, duplicarla.
+    // Se debe inicializar con 4 para evitar un crecimiento demasiado pequeño y mejorar el rendimiento.
+    // En caso contrario, duplicar la capacidad permite un crecimiento exponencial 
+    // y reduce la frecuencia de las reasignaciones de memoria.
     if (list->capacity == 0) {
         new_capacity = 4;
     } else {
         new_capacity = list->capacity * 2;
     }
 
-    Var* new_items = realloc(
-        list->items,
-        new_capacity * sizeof(Var)
-    );
+    Var* new_items = realloc(list->items, new_capacity * sizeof(Var));
 
     if (new_items == NULL) {
         return false;
@@ -81,14 +82,18 @@ bool var_set(VarList* list, const char* key, const char* value) {
 
     // Buscar si la variable ya existe. 
     for (int i = 0; i < list->size; i++) {
+
+        // Si la variable existe, actualizar su valor.
         if (strcmp(list->items[i].name, key) == 0) {
 
+            // Duplicar el nuevo valor.
             char* new_value = duplicate_string(value);
 
             if (new_value == NULL) {
                 return false;
             }
 
+            // Liberar el valor anterior y asignar el nuevo valor.
             free(list->items[i].value);
             list->items[i].value = new_value;
 
@@ -103,6 +108,7 @@ bool var_set(VarList* list, const char* key, const char* value) {
         }
     }
 
+    // En caso de que la variable no exista:
     // Crear una nueva variable. 
     char* new_name = duplicate_string(key);
     char* new_value = duplicate_string(value);
@@ -126,6 +132,7 @@ char* var_get(const VarList* list, const char* key) {
         return NULL;
     }
 
+    // Buscar la variable por su nombre.
     for (int i = 0; i < list->size; i++) {
         if (strcmp(list->items[i].name, key) == 0) {
             return list->items[i].value;
@@ -149,8 +156,10 @@ static bool append_text(char** result, int* length, int* capacity,
         return false;
     }
 
+    // Calcular la longitud requerida para el resultado.
     int required = *length + text_length + 1;
 
+    // Si la capacidad actual es menor que la requerida, aumentar la capacidad.
     if (required > *capacity) {
         int new_capacity = *capacity;
 
@@ -158,6 +167,7 @@ static bool append_text(char** result, int* length, int* capacity,
             new_capacity = 32;
         }
 
+        // Aumentar la capacidad hasta que sea suficiente para el resultado requerido.
         while (new_capacity < required) {
             if (new_capacity > INT_MAX / 2) {
                 new_capacity = required;
@@ -167,6 +177,7 @@ static bool append_text(char** result, int* length, int* capacity,
             new_capacity *= 2;
         }
 
+        // Reasignar memoria para el resultado con la nueva capacidad.
         char* new_result = realloc(*result, new_capacity);
 
         if (new_result == NULL) {
@@ -179,6 +190,7 @@ static bool append_text(char** result, int* length, int* capacity,
 
     memcpy(*result + *length, text, text_length);
 
+    // Actualizar la longitud del resultado y agregar el carácter nulo al final.
     *length += text_length;
     (*result)[*length] = '\0';
 
@@ -197,6 +209,7 @@ char* substitute(const char* text, const VarList* list) {
 
     int i = 0;
 
+    // Iterar a través de la cadena de entrada y buscar variables para sustituir.
     while (text[i] != '\0') {
 
         // Buscar el inicio de una variable: $( 
@@ -210,6 +223,7 @@ char* substitute(const char* text, const VarList* list) {
                 end++;
             }
 
+            // Si se encuentra el cierre de la variable, extraer la clave y buscar su valor.
             if (text[end] == ')') {
 
                 int key_length = end - start;
