@@ -48,6 +48,8 @@ typedef struct {
     char* stage; // Nombre de la etapa a la que pertenece el trabajo
     int* deps; // Índices de los trabajos de los que depende este trabajo
     int deps_count; // Número de dependencias
+    char** pending_deps; // Nombres de los trabajos pendientes de los que depende este trabajo
+    int pending_deps_count; // Número de dependencias pendientes
     Condition cond; // Condición de ejecución del trabajo
     int timeout_s; // Tiempo máximo de ejecución del trabajo en segundos
     Step* steps; // Pasos del trabajo
