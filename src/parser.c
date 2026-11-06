@@ -11,21 +11,24 @@
 // Funciones auxiliarse para parser
 
 // Declaraciones de funciones privadas
+// Función para parsear el contenido principal del pipeline
 static bool parse_root(yaml_parser_t* parser, Pipeline* pipeline, ErrorList* errors);
-
+// Función para parsear la lista de variables del pipeline
 static bool parse_variables(yaml_parser_t* parser, VarList* vars, ErrorList* errors);
-
+// Función para parsear la lista de stages del pipeline
 static bool parse_stages(yaml_parser_t* parser, Pipeline* pipeline, ErrorList* errors);
-
+// Función para parsear la lista de jobs de un stage
 static bool parse_jobs(yaml_parser_t* parser, Pipeline* pipeline, const char* stage, ErrorList* errors);
-
+// Función para parsear un job individual
 static bool parse_job(yaml_parser_t* parser, Pipeline* pipeline, const char* stage, ErrorList* errors);
-
+// Función para parsear la lista de pasos de un job
 static bool parse_steps(yaml_parser_t* parser, Job* job, ErrorList* errors);
-
+// Función para parsear un paso individual
 static bool parse_step(yaml_parser_t* parser, Step* step, ErrorList* errors);
-
+// Función para parsear la lista de variables de entrada de un paso
 static bool parse_inputs(yaml_parser_t* parser, VarList* inputs, ErrorList* errors);
+// Función para resolver las dependencias entre jobs y convertirlos en índices
+static bool resolve_dependencies(Pipeline* pipeline, ErrorList* errors);
 
 
 // Función principal
@@ -87,6 +90,10 @@ Pipeline* parse_pipeline(const char* yaml, size_t len, ErrorList* errors) {
             success = event.type == YAML_DOCUMENT_END_EVENT;
             yaml_event_delete(&event);
         }
+    }
+
+    if (success) {
+        success = resolve_dependencies(pipeline, errors);
     }
 
     // Leer el final del flujo.
