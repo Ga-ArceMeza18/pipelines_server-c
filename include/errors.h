@@ -18,6 +18,7 @@ typedef struct {
 void errors_init(ErrorList* errors);
 
 // Agregar un error a la lista
+// line: número de línea donde ocurrió el error
 void errors_add(ErrorList* errors, int line, const char* message);
 
 // Liberar la memoria utilizada por la lista de errores
