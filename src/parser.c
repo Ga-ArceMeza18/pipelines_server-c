@@ -522,6 +522,12 @@ static bool parse_stages(yaml_parser_t* parser, Pipeline* pipeline,ErrorList* er
 
         char* stage_name = NULL;
         bool has_jobs = false;
+        char** stage_dependencies = NULL;
+        int stage_dependencies_count = 0;
+        bool has_depends = false;
+
+        Condition stage_condition = CONDITION_SUCCEEDED;
+        bool has_condition = false;
 
         // Leer las propiedades de la etapa.
         while (true) {
@@ -616,6 +622,162 @@ static bool parse_stages(yaml_parser_t* parser, Pipeline* pipeline,ErrorList* er
 
                 has_jobs = true;
 
+
+            } else if (strcmp(key, "dependsOn") == 0) {
+                if (has_depends) {
+                    errors_add(errors, line, "Propiedad dependsOn duplicada");
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                if (!yaml_parser_parse(parser, &event)) {
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                if (event.type == YAML_SCALAR_EVENT) {
+                    char* dependency = malloc(event.data.scalar.length + 1);
+
+                    if (dependency == NULL) {
+                        yaml_event_delete(&event);
+                        free(key);
+                        free(stage_name);
+                        free(previous_stage);
+                        return false;
+                    }
+
+                    memcpy(dependency, event.data.scalar.value, event.data.scalar.length);
+                    dependency[event.data.scalar.length] = '\0';
+                    yaml_event_delete(&event);
+
+                    char** new_dependencies = realloc(stage_dependencies, sizeof(char*) * (stage_dependencies_count + 1));
+
+                    if (new_dependencies == NULL) {
+                        free(dependency);
+                        free(key);
+                        free(stage_name);
+                        free(previous_stage);
+                        return false;
+                    }
+
+                    stage_dependencies = new_dependencies;
+                    stage_dependencies[stage_dependencies_count++] = dependency;
+
+                } else if (event.type == YAML_SEQUENCE_START_EVENT) {
+                    yaml_event_delete(&event);
+
+                    while (true) {
+                        if (!yaml_parser_parse(parser, &event)) {
+                            free(key);
+                            free(stage_name);
+                            free(previous_stage);
+                            return false;
+                        }
+
+                        if (event.type == YAML_SEQUENCE_END_EVENT) {
+                            yaml_event_delete(&event);
+                            break;
+                        }
+
+                        if (event.type != YAML_SCALAR_EVENT) {
+                            errors_add(errors, (int)event.start_mark.line + 1, "Cada dependencia de stage debe ser un nombre");
+
+                            yaml_event_delete(&event);
+                            free(key);
+                            free(stage_name);
+                            free(previous_stage);
+                            return false;
+                        }
+
+                        char* dependency = malloc(event.data.scalar.length + 1);
+
+                        if (dependency == NULL) {
+                            yaml_event_delete(&event);
+                            free(key);
+                            free(stage_name);
+                            free(previous_stage);
+                            return false;
+                        }
+
+                        memcpy(dependency, event.data.scalar.value, event.data.scalar.length);
+                        dependency[event.data.scalar.length] = '\0';
+                        yaml_event_delete(&event);
+
+                        char** new_dependencies = realloc(stage_dependencies, sizeof(char*) * (stage_dependencies_count + 1));
+
+                        if (new_dependencies == NULL) {
+                            free(dependency);
+                            free(key);
+                            free(stage_name);
+                            free(previous_stage);
+                            return false;
+                        }
+
+                        stage_dependencies = new_dependencies;
+                        stage_dependencies[stage_dependencies_count++] = dependency;
+                    }
+                } else {
+                    errors_add(errors, (int)event.start_mark.line + 1,
+                            "dependsOn debe ser un nombre o una secuencia");
+
+                    yaml_event_delete(&event);
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                has_depends = true;
+
+            } else if (strcmp(key, "condition") == 0) {
+                if (has_condition) {
+                    errors_add(errors, line, "Propiedad condition duplicada");
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                if (!yaml_parser_parse(parser, &event)) {
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                if (event.type != YAML_SCALAR_EVENT) {
+                    errors_add(errors, (int)event.start_mark.line + 1, "condition debe ser escalar");
+
+                    yaml_event_delete(&event);
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                if (strncmp((char*)event.data.scalar.value, "succeeded()", event.data.scalar.length) == 0) {
+                    stage_condition = CONDITION_SUCCEEDED;
+                } else if (strncmp((char*)event.data.scalar.value, "failed()", event.data.scalar.length) == 0) {
+                    stage_condition = CONDITION_FAILED;
+                } else if (strncmp((char*)event.data.scalar.value, "always()", event.data.scalar.length) == 0) {
+                    stage_condition = CONDITION_ALWAYS;
+                } else {
+                    errors_add(errors, line, "Condición desconocida");
+
+                    yaml_event_delete(&event);
+                    free(key);
+                    free(stage_name);
+                    free(previous_stage);
+                    return false;
+                }
+
+                yaml_event_delete(&event);
+                has_condition = true;
+                
             } else {
                 errors_add(errors, line, "Propiedad desconocida en stage");
 
@@ -628,12 +790,24 @@ static bool parse_stages(yaml_parser_t* parser, Pipeline* pipeline,ErrorList* er
             free(key);
         }
 
+        // Validar que la etapa tenga un nombre y al menos un job.
         if (stage_name == NULL || !has_jobs) {
             errors_add(errors, 0, "Cada stage requiere stage y jobs");
 
             free(stage_name);
             free(previous_stage);
             return false;
+        }
+
+        // Revisa has_condition y asigna la condición a los jobs del stage si es necesario
+        if (has_condition) {
+            for (int i = 0; i < pipeline->jobs_count; i++) {
+                Job* job = &pipeline->jobs[i];
+
+                if (strcmp(job->stage, stage_name) == 0) {
+                    job->cond = stage_condition;
+                }
+            }
         }
 
         // Agregar dependencias implícitas respecto a la etapa anterior.
@@ -748,7 +922,7 @@ static bool parse_job(yaml_parser_t* parser, Pipeline* pipeline, const char* sta
 
     // Inicializar los valores predeterminados.
     job.state = STATE_PENDING;
-    job.cond = CONDITION_NONE;
+    job.cond = CONDITION_SUCCEEDED;
     job.timeout_s = 0;
 
     varlist_init(&job.out_vars);
@@ -860,39 +1034,8 @@ static bool parse_job(yaml_parser_t* parser, Pipeline* pipeline, const char* sta
                 return false;
             }
 
-            if (event.type != YAML_SEQUENCE_START_EVENT) {
-                errors_add(errors, (int)event.start_mark.line + 1, "dependsOn debe ser una secuencia");
-
-                yaml_event_delete(&event);
-                free(key);
-                destroy_job(&job);
-                return false;
-            }
-
-            yaml_event_delete(&event);
-
-            // Leer cada nombre de dependencia.
-            while (true) {
-                if (!yaml_parser_parse(parser, &event)) {
-                    free(key);
-                    destroy_job(&job);
-                    return false;
-                }
-
-                if (event.type == YAML_SEQUENCE_END_EVENT) {
-                    yaml_event_delete(&event);
-                    break;
-                }
-
-                if (event.type != YAML_SCALAR_EVENT) {
-                    errors_add(errors, (int)event.start_mark.line + 1, "Cada dependencia debe ser un nombre");
-
-                    yaml_event_delete(&event);
-                    free(key);
-                    destroy_job(&job);
-                    return false;
-                }
-
+            // Caso 1: una única dependencia.
+            if (event.type == YAML_SCALAR_EVENT) {
                 char* dependency = malloc(event.data.scalar.length + 1);
 
                 if (dependency == NULL) {
@@ -915,6 +1058,64 @@ static bool parse_job(yaml_parser_t* parser, Pipeline* pipeline, const char* sta
                 }
 
                 free(dependency);
+            }
+
+            // Caso 2: una lista de dependencias.
+            else if (event.type == YAML_SEQUENCE_START_EVENT) {
+                yaml_event_delete(&event);
+
+                while (true) {
+                    if (!yaml_parser_parse(parser, &event)) {
+                        free(key);
+                        destroy_job(&job);
+                        return false;
+                    }
+
+                    if (event.type == YAML_SEQUENCE_END_EVENT) {
+                        yaml_event_delete(&event);
+                        break;
+                    }
+
+                    if (event.type != YAML_SCALAR_EVENT) {
+                        errors_add(errors, (int)event.start_mark.line + 1, "Cada dependencia debe ser un nombre");
+                        yaml_event_delete(&event);
+                        free(key);
+                        destroy_job(&job);
+                        return false;
+                    }
+
+                    char* dependency = malloc(event.data.scalar.length + 1);
+
+                    if (dependency == NULL) {
+                        yaml_event_delete(&event);
+                        free(key);
+                        destroy_job(&job);
+                        return false;
+                    }
+
+                    memcpy(dependency, event.data.scalar.value, event.data.scalar.length);
+                    dependency[event.data.scalar.length] = '\0';
+
+                    yaml_event_delete(&event);
+
+                    if (!add_pending_dependency(&job, dependency)) {
+                        free(dependency);
+                        free(key);
+                        destroy_job(&job);
+                        return false;
+                    }
+
+                    free(dependency);
+                }
+            }
+
+            // Cualquier otro tipo de valor es inválido.
+            else {
+                errors_add(errors, (int)event.start_mark.line + 1, "dependsOn debe ser un nombre o una secuencia");
+                yaml_event_delete(&event);
+                free(key);
+                destroy_job(&job);
+                return false;
             }
 
             has_depends = true;
@@ -978,7 +1179,7 @@ static bool parse_job(yaml_parser_t* parser, Pipeline* pipeline, const char* sta
         }
 
         // Leer el tiempo máximo de ejecución.
-        else if (strcmp(key, "timeout") == 0) {
+        else if (strcmp(key, "timeoutInSeconds") == 0) {
             if (has_timeout) {
                 errors_add(errors, line, "Propiedad timeout duplicada");
                 free(key);
