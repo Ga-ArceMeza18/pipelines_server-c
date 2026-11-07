@@ -130,6 +130,10 @@ static bool visit_job(
 }
 
 static bool validate_cycles(Pipeline* pipeline, ErrorList* errors) {
+    if (pipeline->jobs_count <= 0) {
+        return true;
+    }
+    
     int* colors = calloc(pipeline->jobs_count, sizeof(int));
 
     if (pipeline->jobs_count > 0 && colors == NULL) {
