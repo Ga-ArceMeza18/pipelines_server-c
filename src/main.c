@@ -1,7 +1,3 @@
-// main.c - Programa principal: ejecuta un pipeline YAML y muestra su estado final
-//
-// uso: ./run/servidor pipeline.yaml [agentes] [carpeta_de_trabajo]
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
