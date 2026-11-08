@@ -6,7 +6,7 @@
 #include "pipeline.h"
 
 // datatype: run
-typedef struct Run {
+typedef struct {
     int id;              // comm: identificar la ejecución
     Pipeline *p;         // comm: apuntar al pipeline que la ejecución posee
     State state;         // comm: guardar el estado global de la ejecución
