@@ -1,0 +1,15 @@
+name: FollowPipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Lines
+        steps:
+          - script: "for i in 1 2 3 4; do echo linea $i; sleep 0.5; done"
+          - script: "printf 'mitad...'; sleep 0.7; echo ' completa'"
+
+  - stage: Test
+    jobs:
+      - job: Last
+        steps:
+          - script: "echo fin del pipeline"

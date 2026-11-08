@@ -1,0 +1,22 @@
+name: ParallelPipeline
+
+stages:
+  - stage: Work
+    jobs:
+      - job: Uno
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "1"
+
+      - job: Dos
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "1"
+
+      - job: Tres
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "1"

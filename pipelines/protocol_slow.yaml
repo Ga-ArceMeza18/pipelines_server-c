@@ -1,0 +1,10 @@
+name: SlowPipeline
+
+stages:
+  - stage: Wait
+    jobs:
+      - job: Long
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "30"
