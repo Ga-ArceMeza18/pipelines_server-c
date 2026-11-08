@@ -1468,10 +1468,13 @@ static bool parse_step(yaml_parser_t* parser, Step* step, ErrorList* errors) {
             if (has_inputs) {
                 errors_add(errors, event.start_mark.line + 1, "La propiedad inputs está duplicada");
                 success = false;
+            } else if (event.type != YAML_MAPPING_START_EVENT) {
+                errors_add(errors, event.start_mark.line + 1, "inputs debe ser un mapping");
+                success = false;
             } else {
                 has_inputs = true;
 
-                // parse_inputs consume el mapping completo.
+                // El inicio del mapping ya fue consumido; parse_inputs lee el resto.
                 yaml_event_delete(&event);
                 free(key);
 
@@ -1598,18 +1601,6 @@ static bool parse_step(yaml_parser_t* parser, Step* step, ErrorList* errors) {
 
 static bool parse_inputs(yaml_parser_t* parser, VarList* inputs, ErrorList* errors) {
     yaml_event_t event;
-
-    if (!yaml_parser_parse(parser, &event)) {
-        return false;
-    }
-
-    if (event.type != YAML_MAPPING_START_EVENT) {
-        errors_add(errors, event.start_mark.line + 1, "inputs debe ser un mapping");
-        yaml_event_delete(&event);
-        return false;
-    }
-
-    yaml_event_delete(&event);
 
     while (true) {
         if (!yaml_parser_parse(parser, &event)) {
