@@ -1,0 +1,23 @@
+name: Ejemplo
+variables:
+  SALUDO: hola
+stages:
+  - stage: Build
+    jobs:
+      - job: Calcular
+        steps:
+          - script: echo "$(SALUDO) desde Calcular"
+          - task: Cpu@1
+            inputs:
+              iterations: "1000000"
+              seed: "42"
+      - job: Esperar
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "1"
+  - stage: Test
+    jobs:
+      - job: Mostrar
+        steps:
+          - script: echo "resultado=$(CPU_RESULT)"

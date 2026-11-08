@@ -10,6 +10,7 @@ typedef enum {
     STATE_PENDING,
     STATE_RUNNING,
     STATE_SUCCESS,
+    STATE_PARTIALLY_SUCCESS,
     STATE_FAILED,
     STATE_SKIPPED,
     STATE_CANCELLED
@@ -34,12 +35,13 @@ typedef enum {
 // Paso de un trabajo
 typedef struct {
     StepKind kind; // Tipo de paso: script, task, publish o download
-    char* text; // Texto del paso (script o task)
-    char* artifact; // Nombre del artefacto (para publish o download)
-    VarList inputs; // Variables de entrada (para publish o download)
+    char* text; // Texto del paso (script, task, ruta a publicar o nombre del artefacto a descargar)
+    char* artifact; // Nombre del artefacto (publish) o directorio destino (download)
+    VarList inputs; // Variables de entrada (para task)
     bool continue_on_error; // Indica si continuar el trabajo en caso de error
     State state; // Estado del paso
     int exit_code; // Código de salida del paso
+    double duration_s; // Duración del paso en segundos
 } Step;
 
 // Trabajo
@@ -55,7 +57,8 @@ typedef struct {
     Step* steps; // Pasos del trabajo
     int steps_count; // Número de pasos
     State state; // Estado del trabajo
-    int pending; // Número de pasos pendientes
+    int pending; // Número de dependencias que faltan por terminar
+    double duration_s; // Duración del trabajo en segundos
     VarList out_vars; // Variables de salida del trabajo
 } Job;
 
@@ -67,5 +70,8 @@ typedef struct {
     int jobs_count; // Número de trabajos
     bool** ancestor; // Matriz de ancestros, dependencias (jobs_count x jobs_count)
 } Pipeline;
+
+// Libera el pipeline completo y todo lo que posee
+void pipeline_free(Pipeline* pipeline);
 
 #endif
