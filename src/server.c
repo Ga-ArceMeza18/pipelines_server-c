@@ -2,6 +2,7 @@
 
 #include "engine.h"
 #include "errors.h"
+#include "log_reader.h"
 #include "net_util.h"
 #include "parser.h"
 
@@ -178,13 +179,28 @@ static void cmd_status(Server* srv, int fd, int argc, char** argv) {
 static void cmd_logs(Server* srv, int fd, int argc, char** argv) {
     int id;
 
+    const char* job = NULL;
+    bool follow = false;
+
     (void)srv;
     if (argc < 2 || argc > 4 || parse_int(argv[1], &id) != 0) {
         reply(fd, "ERROR uso: LOGS <id> [trabajo] [FOLLOW]");
         return;
     }
 
-    reply(fd, "ERROR LOGS todavía no está implementado");
+    // Lo que sigue al id es el nombre del trabajo, FOLLOW o los dos
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "FOLLOW") == 0 && !follow) {
+            follow = true;
+        } else if (job == NULL) {
+            job = argv[i];
+        } else {
+            reply(fd, "ERROR uso: LOGS <id> [trabajo] [FOLLOW]");
+            return;
+        }
+    }
+
+    send_logs(fd, id, job, follow);
 }
 
 static void cmd_cancel(Server* srv, int fd, int argc, char** argv) {
