@@ -77,14 +77,14 @@ static bool run_test(const ParserTest* test) {
 
 int main(void) {
     ParserTest tests[] = {
-        {"pipeline/valid_basic.yaml", true},
-        {"pipeline/valid_dependencies.yaml", true},
-        {"pipeline/valid_conditions.yaml", true},
-        {"pipeline/invalid_syntax.yaml", false},
-        {"pipeline/invalid_key.yaml", false},
-        {"pipeline/invalid_dependency.yaml", false},
-        {"pipeline/invalid_cycle.yaml", false},
-        {"pipeline/invalid_duplicate.yaml", false}
+        {"pipelines/valid_basic.yaml", true},
+        {"pipelines/valid_dependencies.yaml", true},
+        {"pipelines/valid_conditions.yaml", true},
+        {"pipelines/invalid_syntax.yaml", false},
+        {"pipelines/invalid_key.yaml", false},
+        {"pipelines/invalid_dependency.yaml", false},
+        {"pipelines/invalid_cycle.yaml", false},
+        {"pipelines/invalid_duplicate.yaml", false}
     };
 
     int total = sizeof(tests) / sizeof(tests[0]);
