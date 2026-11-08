@@ -21,3 +21,10 @@ man/
 xml/
 bin/
 build/
+
+# Compilación del proyecto
+build_sp/
+pipelined
+pipectl
+pipelined_sp
+*.d
