@@ -1,0 +1,25 @@
+name: ConditionsPipeline
+
+stages:
+  - stage: Build
+    condition: succeeded()
+    jobs:
+      - job: Compile
+        condition: succeeded()
+        timeoutInSeconds: 30
+        steps:
+          - script: "echo Compilando"
+
+  - stage: Cleanup
+    dependsOn: Build
+    condition: always()
+    jobs:
+      - job: Clean
+        condition: always()
+        steps:
+          - script: "echo Limpiando archivos temporales"
+
+      - job: Report
+        condition: failed()
+        steps:
+          - script: "echo Reportando errores"

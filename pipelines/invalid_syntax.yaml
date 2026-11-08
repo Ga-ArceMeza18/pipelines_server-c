@@ -1,0 +1,8 @@
+name: InvalidSyntaxPipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Compile
+        steps:
+          - script: "echo "Compilando

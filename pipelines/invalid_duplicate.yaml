@@ -1,0 +1,12 @@
+name: InvalidDuplicatePipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Compile
+        steps:
+          - script: "echo Primera compilación"
+
+      - job: Compile
+        steps:
+          - script: "echo Segunda compilación"

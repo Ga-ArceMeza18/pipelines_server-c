@@ -1,0 +1,27 @@
+name: DependenciesPipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Compile
+        steps:
+          - script: "echo Compilando"
+
+      - job: Prepare
+        steps:
+          - script: "echo Preparando"
+
+  - stage: Test
+    dependsOn: Build
+    jobs:
+      - job: UnitTests
+        dependsOn: Compile
+        steps:
+          - script: "echo Ejecutando pruebas unitarias"
+
+      - job: IntegrationTests
+        dependsOn:
+          - Compile
+          - Prepare
+        steps:
+          - script: "echo Ejecutando pruebas de integración"
