@@ -1,6 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "engine.h"
+#include "errors.h"
 #include "net_util.h"
+#include "parser.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -18,6 +21,7 @@
 #define LINE_MAX_LEN 512
 #define MAX_TOKENS 5
 #define RECV_TIMEOUT_SECONDS 30
+#define MAX_YAML_BYTES (1024 * 1024)
 
 struct Server;
 
@@ -66,6 +70,11 @@ static void reply(int fd, const char* fmt, ...) {
     nu_write_all(fd, buffer, (size_t)n);
 }
 
+// Envía un texto de varias líneas a como viene del engine
+static void reply_text(int fd, const char* text) {
+    nu_write_all(fd, text, strlen(text));
+}
+
 // Convierte un texto a entero positivo. Solo acepta dígitos
 static int parse_int(const char* text, int* out) {
     char* end;
@@ -95,8 +104,54 @@ static void cmd_submit(Server* srv, int fd, int argc, char** argv) {
         reply(fd, "ERROR uso: SUBMIT <bytes>");
         return;
     }
+    if (size > MAX_YAML_BYTES) {
+        reply(fd, "ERROR el YAML no puede pasar de %d bytes", MAX_YAML_BYTES);
+        return;
+    }
 
-    reply(fd, "ERROR SUBMIT todavía no está implementado");
+    char* yaml = malloc((size_t)size + 1);
+    if (yaml == NULL) {
+        reply(fd, "ERROR servidor sin memoria");
+        return;
+    }
+    if (nu_read_exact(fd, yaml, (size_t)size) != 0) {
+        reply(fd, "ERROR no llegaron los %d bytes del YAML", size);
+        free(yaml);
+        return;
+    }
+    yaml[size] = '\0';
+
+    // El parser también llama al validator, si algo falla devuelve NULL con los errores
+    ErrorList errors;
+    errors_init(&errors);
+    Pipeline* pipeline = parse_pipeline(yaml, (size_t)size, &errors);
+    free(yaml);
+
+    if (pipeline == NULL) {
+        reply(fd, "ERROR pipeline inválido (%d error(es))", errors.size);
+        for (int i = 0; i < errors.size; i++) {
+            if (errors.items[i].line > 0) {
+                reply(fd, "línea %d: %s", errors.items[i].line, errors.items[i].message);
+            } else {
+                reply(fd, "%s", errors.items[i].message);
+            }
+        }
+        if (errors.size == 0) {
+            reply(fd, "el YAML está mal formado");
+        }
+        errors_destroy(&errors);
+        return;
+    }
+    errors_destroy(&errors);
+
+    // El engine se queda con el pipeline aunque falle
+    int id = engine_submit(pipeline);
+    if (id < 0) {
+        reply(fd, "ERROR no se pudo aceptar el pipeline, el servidor se está apagando");
+        return;
+    }
+
+    reply(fd, "OK %d", id);
 }
 
 static void cmd_status(Server* srv, int fd, int argc, char** argv) {
@@ -108,7 +163,15 @@ static void cmd_status(Server* srv, int fd, int argc, char** argv) {
         return;
     }
 
-    reply(fd, "ERROR STATUS todavía no está implementado");
+    char* text = engine_status(id);
+    if (text == NULL) {
+        reply(fd, "ERROR no existe la ejecución %d", id);
+        return;
+    }
+
+    reply(fd, "OK");
+    reply_text(fd, text);
+    free(text);
 }
 
 // LOGS <id> [trabajo] [FOLLOW]
@@ -133,7 +196,13 @@ static void cmd_cancel(Server* srv, int fd, int argc, char** argv) {
         return;
     }
 
-    reply(fd, "ERROR CANCEL todavía no está implementado");
+    // engine_cancel da false si el id no existe o si la ejecución ya terminó
+    if (!engine_cancel(id)) {
+        reply(fd, "ERROR la ejecución %d no existe o ya terminó", id);
+        return;
+    }
+
+    reply(fd, "OK ejecución %d cancelada", id);
 }
 
 static void cmd_list(Server* srv, int fd, int argc) {
@@ -143,7 +212,15 @@ static void cmd_list(Server* srv, int fd, int argc) {
         return;
     }
 
-    reply(fd, "ERROR LIST todavía no está implementado");
+    char* text = engine_list();
+    if (text == NULL) {
+        reply(fd, "ERROR servidor sin memoria");
+        return;
+    }
+
+    reply(fd, "OK");
+    reply_text(fd, text);
+    free(text);
 }
 
 // SHUTDOWN: el primero que llega hace el apagado, los demás esperan a que termine
@@ -166,8 +243,13 @@ static void server_shutdown(Server* srv) {
     for (Conn* conn = srv->conns; conn != NULL; conn = conn->next) {
         shutdown(conn->fd, SHUT_RD);
     }
+    pthread_mutex_unlock(&srv->mutex);
 
-    // Aquí después se llama a engine_shutdown
+    // El engine cancela lo que está corriendo y espera a que terminen los agentes.
+    // Se llama sin el mutex porque puede tardar
+    engine_shutdown();
+
+    pthread_mutex_lock(&srv->mutex);
     srv->shutdown_done = 1;
     pthread_cond_broadcast(&srv->changed);
     pthread_mutex_unlock(&srv->mutex);
@@ -342,8 +424,18 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    printf("escuchando en el puerto %d (agentes=%d, directorio=%s)\n",
-           port, srv.agents, srv.workdir);
+    // Con 0 hilos el engine reparte los núcleos entre los agentes
+    engine_set_task_threads(srv.threads);
+    if (engine_start(srv.agents, srv.workdir) != 0) {
+        fprintf(stderr, "no se pudo arrancar el engine en '%s'\n", srv.workdir);
+        close(srv.listen_fd);
+        pthread_cond_destroy(&srv.changed);
+        pthread_mutex_destroy(&srv.mutex);
+        return EXIT_FAILURE;
+    }
+
+    printf("escuchando en el puerto %d (agentes: %d, hilos por tarea: %d, directorio: %s)\n",
+           port, srv.agents, engine_task_threads(), srv.workdir);
     fflush(stdout);
 
     // Termina cuando SHUTDOWN cierra el socket de escucha
@@ -384,6 +476,9 @@ int main(int argc, char* argv[]) {
         pthread_cond_wait(&srv.changed, &srv.mutex);
     }
     pthread_mutex_unlock(&srv.mutex);
+
+    // Por si se salió del ciclo por un error de accept y no por SHUTDOWN
+    engine_shutdown();
 
     close(srv.listen_fd);
     pthread_cond_destroy(&srv.changed);
