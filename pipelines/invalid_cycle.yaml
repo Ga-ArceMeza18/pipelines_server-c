@@ -1,0 +1,14 @@
+name: InvalidCyclePipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: JobA
+        dependsOn: JobB
+        steps:
+          - script: "echo A"
+
+      - job: JobB
+        dependsOn: JobA
+        steps:
+          - script: "echo B"

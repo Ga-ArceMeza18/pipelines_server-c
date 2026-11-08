@@ -1,0 +1,9 @@
+name: InvalidKeyPipeline
+
+stages:
+  - stage: Build
+    unknownProperty: true
+    jobs:
+      - job: Compile
+        steps:
+          - script: "echo Compilando"

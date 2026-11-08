@@ -1,0 +1,16 @@
+name: BasicPipeline
+
+variables:
+  MESSAGE: "Hola desde el pipeline"
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Prepare
+        steps:
+          - script: "echo Preparando"
+          - script: "echo $(MESSAGE)"
+
+      - job: Compile
+        steps:
+          - script: "echo Compilando"

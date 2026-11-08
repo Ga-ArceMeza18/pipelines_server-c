@@ -1,0 +1,9 @@
+name: InvalidDependencyPipeline
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Compile
+        dependsOn: NonExistingJob
+        steps:
+          - script: "echo Compilando"
