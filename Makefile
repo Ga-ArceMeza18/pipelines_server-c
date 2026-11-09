@@ -68,10 +68,10 @@ $(BUILD)/test_%: tests/test_%.c $(CORE_OBJ) | $(BUILD)
 $(BUILD) $(BUILD_SP):
 	mkdir -p $@
 
-# Compilar y ejecutar benchmarks
+# Compilar y ejecutar todos los benchmarks
 bench: all
-	$(CC) -O2 -Wall -Wextra -Iinclude -o bench tools/bench.c src/net_util.c
-	./bench -s ./pipelined -r 3 -o benchmark.csv
+	$(CC) $(CFLAGS) -o bench tools/bench.c src/net_util.c $(LDFLAGS)
+	./bench -s ./pipelined -r 5 -a 1,2,4,8 -t 1,2,4,8 -e wide,deep,combined,wordcount,histogram -o benchmark.csv
 	python3 tools/plot.py benchmark.csv
 
 test: all $(TEST_BIN)
