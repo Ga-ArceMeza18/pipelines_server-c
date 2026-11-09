@@ -31,7 +31,6 @@ CORE_OBJ    = $(CORE_SRC:src/%.c=$(BUILD)/%.o)
 CORE_OBJ_SP = $(CORE_SRC:src/%.c=$(BUILD_SP)/%.o)
 CLIENT_OBJ  = $(CLIENT_SRC:src/%.c=$(BUILD)/%.o)
 
-
 BINS = $(if $(wildcard $(SERVER_MAIN)),pipelined) $(if $(wildcard $(CLIENT_MAIN)),pipectl)
 
 # Pruebas, cada tests se compila con los módulos compartidos y se corre
@@ -39,7 +38,7 @@ TEST_SRC = $(wildcard tests/test_*.c)
 TEST_BIN = $(TEST_SRC:tests/%.c=$(BUILD)/%)
 TEST_SH  = $(wildcard tests/test_*.sh)
 
-.PHONY: all sinproteccion test clean
+.PHONY: all sinproteccion test bench clean
 
 all: $(ALL_OBJ) $(BINS)
 
@@ -69,12 +68,18 @@ $(BUILD)/test_%: tests/test_%.c $(CORE_OBJ) | $(BUILD)
 $(BUILD) $(BUILD_SP):
 	mkdir -p $@
 
+# Compilar y ejecutar benchmarks
+bench: all
+	$(CC) -O2 -Wall -Wextra -Iinclude -o bench tools/bench.c src/net_util.c
+	./bench -s ./pipelined -r 3 -o benchmark.csv
+	python3 tools/plot.py benchmark.csv
+
 test: all $(TEST_BIN)
 	@set -e; for t in $(TEST_BIN); do echo "== $$t"; $$t; done
 	@set -e; for t in $(TEST_SH); do echo "== $$t"; bash $$t; done
 	@if [ -z "$(TEST_BIN)$(TEST_SH)" ]; then echo "todavia no hay pruebas en tests/"; fi
 
 clean:
-	rm -rf $(BUILD) $(BUILD_SP) pipelined pipectl pipelined_sp
+	rm -rf $(BUILD) $(BUILD_SP) pipelined pipectl pipelined_sp bench
 
 -include $(wildcard $(BUILD)/*.d $(BUILD_SP)/*.d)

@@ -122,7 +122,7 @@ check "submit rechaza los pipelines inválidos" test_submit_invalid
 # Las variables pasan entre etapas
 test_status_and_logs() {
     local id
-    id=$(submit_id ejemplo.yaml)
+    id=$(submit_id pipelines/ejemplo.yaml)
     wait_state "$id" succeeded 10 || return 1
 
     ctl status "$id" | grep -q "Trabajo Mostrar \[succeeded\]" \
