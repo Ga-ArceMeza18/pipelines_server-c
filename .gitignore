@@ -27,4 +27,5 @@ build_sp/
 pipelined
 pipectl
 pipelined_sp
+bench
 *.d
