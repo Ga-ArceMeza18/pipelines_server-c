@@ -1,0 +1,59 @@
+# Pipeline de ~2 minutos para probar: logs --follow, cancel y shutdown.
+# Tiene jobs en paralelo, un script largo que imprime progreso, Sleep@1 y Cpu@1.
+name: Larga duracion
+
+stages:
+  - stage: Inicio
+    jobs:
+      - job: Preparar
+        steps:
+          - script: echo "preparando..."
+          - task: Sleep@1
+            inputs:
+              seconds: "5"
+
+  - stage: Trabajo
+    jobs:
+      # Script que imprime una línea por segundo (ideal para logs --follow)
+      - job: Progreso
+        timeoutInSeconds: 600
+        steps:
+          - script: |
+              for i in `seq 1 60`; do
+                echo "Progreso paso $i de 60"
+                sleep 1
+              done
+
+      # Tarea integrada: revisa la cancelación cada 0.1 s
+      - job: Espera
+        timeoutInSeconds: 600
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "90"
+
+      # Carga de CPU. Si termina muy rápido o muy lento, ajusta iterations
+      - job: Calculo
+        timeoutInSeconds: 600
+        steps:
+          - task: Cpu@1
+            inputs:
+              iterations: "20000000000"
+              seed: "1"
+
+      # Procesos hijos: prueba que cancel mata todo el grupo (sleep dentro de sh)
+      - job: Hijos
+        timeoutInSeconds: 600
+        steps:
+          - script: sh -c 'sleep 80; echo "no deberia verse si cancelas"'
+
+  - stage: Final
+    jobs:
+      # Corre incluso si cancelas o algo falla
+      - job: Limpieza
+        condition: always()
+        steps:
+          - script: echo "limpieza ejecutada"
+      - job: Resumen
+        steps:
+          - script: echo "todo termino bien"

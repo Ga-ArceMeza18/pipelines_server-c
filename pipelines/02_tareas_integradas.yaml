@@ -1,0 +1,64 @@
+# Tareas integradas del motor: Sleep@1, Cpu@1, WordCount@1, Histogram@1
+name: Tareas integradas
+
+variables:
+  SEMILLA: "42"
+  ITER: "200000000"
+
+stages:
+  - stage: Datos
+    jobs:
+      - job: Generar
+        steps:
+          - script: seq 1 200000 | awk '{ print ($1 * 7919) % 1000 }' > datos.txt
+          - script: printf 'uno dos tres\ncuatro cinco\n' > texto.txt
+          - publish: .
+            artifact: entrada
+
+  - stage: Analisis
+    jobs:
+      - job: Palabras
+        steps:
+          - download: entrada
+            path: .
+          - task: WordCount@1
+            inputs:
+              file: texto.txt
+              output: palabras.txt
+              threads: "2"
+          - script: cat palabras.txt
+
+      - job: Histograma
+        steps:
+          - download: entrada
+            path: .
+          - task: Histogram@1
+            inputs:
+              file: datos.txt
+              output: histograma.csv
+              bins: "10"
+          - script: cat histograma.csv
+          - publish: .
+            artifact: histograma
+
+      # Cpu@1 deja CPU_RESULT como variable para los jobs que dependan de este
+      - job: Calculo
+        timeoutInSeconds: 300
+        steps:
+          - task: Cpu@1
+            inputs:
+              iterations: $(ITER)
+              seed: $(SEMILLA)
+
+      - job: Espera
+        steps:
+          - task: Sleep@1
+            inputs:
+              seconds: "3"
+
+  - stage: Reporte
+    jobs:
+      - job: Resumen
+        condition: always()
+        steps:
+          - script: echo "Resultado Cpu = $(CPU_RESULT)"

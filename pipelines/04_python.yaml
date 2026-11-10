@@ -1,0 +1,86 @@
+# Python dentro del pipeline, usando solo la biblioteca estándar (sin pip).
+# Python puede devolver variables imprimiendo: ##setvariable NOMBRE=valor
+name: Pipeline con Python
+
+variables:
+  CANTIDAD: "100000"
+  SEMILLA: "7"
+
+stages:
+  - stage: Datos
+    jobs:
+      - job: Generar
+        timeoutInSeconds: 120
+        steps:
+          - script: python3 --version
+          - script: |
+              python3 - <<'PY'
+              import random
+              random.seed($(SEMILLA))
+              with open("datos.txt", "w") as f:
+                  for _ in range($(CANTIDAD)):
+                      f.write(f"{random.gauss(50, 15):.4f}\n")
+              print("datos generados")
+              PY
+          - publish: datos.txt
+            artifact: datos
+
+  - stage: Analisis
+    jobs:
+      - job: Estadisticas
+        steps:
+          - download: datos
+            path: .
+          - script: |
+              python3 - <<'PY'
+              import statistics
+              valores = [float(x) for x in open("datos.txt")]
+              media = statistics.mean(valores)
+              mediana = statistics.median(valores)
+              desv = statistics.stdev(valores)
+              print(f"n={len(valores)} media={media:.3f} mediana={mediana:.3f} desv={desv:.3f}")
+              print(f"##setvariable MEDIA={media:.3f}")
+              print(f"##setvariable DESV={desv:.3f}")
+              PY
+
+      # Combinar Python con una tarea integrada del motor
+      - job: Histograma
+        steps:
+          - download: datos
+            path: .
+          - task: Histogram@1
+            inputs:
+              file: datos.txt
+              output: histograma.csv
+              bins: "12"
+          - script: |
+              python3 - <<'PY'
+              # Dibuja el histograma como barras de texto
+              filas = [l.strip().split(",") for l in open("histograma.csv")][1:]
+              maximo = max(int(f[3]) for f in filas)
+              for f in filas:
+                  barra = "#" * int(40 * int(f[3]) / maximo)
+                  print(f"{float(f[1]):7.2f} | {barra} {f[3]}")
+              PY
+
+      - job: PruebasPython
+        steps:
+          - script: |
+              python3 - <<'PY'
+              import unittest
+
+              class Basicas(unittest.TestCase):
+                  def test_suma(self):
+                      self.assertEqual(2 + 2, 4)
+                  def test_cadena(self):
+                      self.assertEqual("ci".upper(), "CI")
+
+              unittest.main(argv=["x"], verbosity=2)
+              PY
+
+  - stage: Reporte
+    jobs:
+      - job: Resumen
+        condition: always()
+        steps:
+          - script: echo "media=$(MEDIA) desviacion=$(DESV)"
