@@ -1,0 +1,57 @@
+#Clona el propio repositorio, compila el código y ejecuta los test.
+name: RepoClonationPipeline
+
+variables:
+  REPO: https://github.com/Ga-ArceMeza18/pipelines_server-c.git
+
+stages:
+  - stage: Fuente
+    jobs:
+      - job: Clonar
+        timeoutInSeconds: 120
+        steps:
+          - script: git clone $(REPO) repo
+          - publish: repo
+            artifact: codigo
+
+  - stage: Compilar
+    jobs:
+      - job: Make
+        timeoutInSeconds: 300
+        steps:
+          - download: codigo
+            path: repo
+          - script: make -C repo
+          - script: cd repo && make `ls tests/test_*.c | sed 's|tests/|build/|; s|\.c$||'`
+          - publish: repo
+            artifact: compilado
+
+  - stage: Probar
+    jobs:
+      - job: Unitarias
+        timeoutInSeconds: 300
+        steps:
+          - download: compilado
+            path: repo
+          - script: |
+              cd repo
+              for t in build/test_*; do
+                case "$t" in *.d) continue ;; esac
+                echo "== $t"
+                ./$t || exit 1
+              done
+
+      - job: Integracion
+        timeoutInSeconds: 300
+        steps:
+          - download: compilado
+            path: repo
+          - script: cd repo && bash tests/test_protocol.sh
+
+  - stage: Reporte
+    condition: always()
+    jobs:
+      - job: Resumen
+        condition: always()
+        steps:
+          - script: echo "Pipeline terminado para $(REPO)"
