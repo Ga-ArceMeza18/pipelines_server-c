@@ -1,0 +1,39 @@
+name: Contador Python
+
+stages:
+  - stage: Contador
+    jobs:
+      - job: Sumar
+        timeoutInSeconds: 300
+        steps:
+          - script: |
+              python3 - <<'PY'
+              import time
+
+              DURACION = 240  
+              INTERVALO = 10  
+              INCREMENTO = 20
+
+              valor = 0
+              inicio = time.monotonic()
+              print(f"t=  0s valor={valor}", flush=True)
+
+              tick = 1
+              while tick * INTERVALO <= DURACION:
+                  restante = inicio + tick * INTERVALO - time.monotonic()
+                  if restante > 0:
+                      time.sleep(restante)
+                  valor += INCREMENTO
+                  print(f"t={tick * INTERVALO:3d}s valor={valor}", flush=True)
+                  tick += 1
+
+              print(f"terminado: valor final={valor}", flush=True)
+              print(f"##setvariable VALOR={valor}")
+              PY
+
+  - stage: Reporte
+    jobs:
+      - job: Resumen
+        condition: always()
+        steps:
+          - script: echo "valor final = $(VALOR)"

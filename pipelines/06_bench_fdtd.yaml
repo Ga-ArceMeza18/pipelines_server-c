@@ -1,0 +1,51 @@
+#Clona otro repositorio, compila el código y ejecuta un benchmark.
+name: RepoClonationFDTD
+
+variables:
+  REPO: https://github.com/Ga-ArceMeza18/fdtd-simulator-server.git
+
+stages:
+  - stage: Fuente
+    jobs:
+      - job: Clonar
+        timeoutInSeconds: 120
+        steps:
+          - script: git clone $(REPO) repo
+          - publish: repo
+            artifact: codigo
+
+  - stage: Compilar
+    jobs:
+      - job: Make
+        timeoutInSeconds: 300
+        steps:
+          - download: codigo
+            path: repo
+          - script: make -C repo
+          - publish: repo
+            artifact: compilado
+
+  - stage: Probar
+    jobs:
+      - job: Benchmark
+        timeoutInSeconds: 1800
+        steps:
+          - download: compilado
+            path: repo
+          - script: cd repo && make bench
+
+      - job: Graficar
+        dependsOn: Benchmark
+        timeoutInSeconds: 300
+        steps:
+          - download: compilado
+            path: repo
+          - script: cd repo && make plots
+
+  - stage: Reporte
+    condition: always()
+    jobs:
+      - job: Resumen
+        condition: always()
+        steps:
+          - script: echo "Pipeline terminado para $(REPO)"

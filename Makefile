@@ -80,6 +80,6 @@ test: all $(TEST_BIN)
 	@if [ -z "$(TEST_BIN)$(TEST_SH)" ]; then echo "todavia no hay pruebas en tests/"; fi
 
 clean:
-	rm -rf $(BUILD) $(BUILD_SP) pipelined pipectl pipelined_sp bench
+	rm -rf $(BUILD) $(BUILD_SP) workdir pipelined pipectl pipelined_sp bench
 
 -include $(wildcard $(BUILD)/*.d $(BUILD_SP)/*.d)
